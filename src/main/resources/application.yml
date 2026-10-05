@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: resilient-reverse-proxy
+
+proxy:
+  backends:
+    - http://localhost:8081
+    - http://localhost:8082
+  rate-limit-per-minute: 100

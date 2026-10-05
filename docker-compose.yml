@@ -5,19 +5,20 @@ services:
     ports:
       - "8080:8080"
     environment:
-      UPSTREAM_URLS: http://backend1:5678,http://backend2:5678
+      PROXY_BACKENDS: http://backend1:5678,http://backend2:5678
+      PROXY_RATE_LIMIT_PER_MINUTE: 100
     depends_on:
       - backend1
       - backend2
 
   backend1:
     image: hashicorp/http-echo:1.0
-    command: ["-listen=:5678", "-text=backend-1"]
+    command: [ "-listen=:5678", "-text=backend-1" ]
     ports:
       - "8081:5678"
 
   backend2:
     image: hashicorp/http-echo:1.0
-    command: ["-listen=:5678", "-text=backend-2"]
+    command: [ "-listen=:5678", "-text=backend-2" ]
     ports:
       - "8082:5678"

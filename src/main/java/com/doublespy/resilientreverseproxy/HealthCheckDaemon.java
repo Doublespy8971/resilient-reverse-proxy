@@ -10,10 +10,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@Slf4j
 public class HealthCheckDaemon {
 
     private static final Duration HEALTH_CHECK_TIMEOUT = Duration.ofSeconds(2);
@@ -46,14 +48,17 @@ public class HealthCheckDaemon {
                     request, HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() >= 500 && response.statusCode() < 600) {
                 upstreamRegistry.markUnhealthy(node);
+                log.warn("Health check failed for backend {} with status {}", node, response.statusCode());
             } else {
                 upstreamRegistry.markHealthy(node);
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             upstreamRegistry.markUnhealthy(node);
+            log.warn("Health check interrupted for backend {}", node, exception);
         } catch (IOException exception) {
             upstreamRegistry.markUnhealthy(node);
+            log.warn("Health check failed for backend {}", node, exception);
         }
     }
 

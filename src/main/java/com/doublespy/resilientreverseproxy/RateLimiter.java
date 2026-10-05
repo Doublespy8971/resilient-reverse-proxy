@@ -8,22 +8,34 @@ import org.springframework.stereotype.Component;
 @Component
 public class RateLimiter {
 
-    private static final double BUCKET_CAPACITY = 100;
     private static final long REFILL_INTERVAL_NANOS = 60_000_000_000L;
-    private static final double TOKENS_PER_NANO = BUCKET_CAPACITY / REFILL_INTERVAL_NANOS;
 
     private final ConcurrentHashMap<String, BucketState> buckets = new ConcurrentHashMap<>();
+    private final int rateLimitPerMinute;
+
+    public RateLimiter(ProxyConfig proxyConfig) {
+        rateLimitPerMinute = proxyConfig.getRateLimitPerMinute();
+    }
 
     public boolean allowRequest(String clientIp) {
-        BucketState bucket = buckets.computeIfAbsent(clientIp, ignored -> new BucketState());
+        BucketState bucket = buckets.computeIfAbsent(
+                clientIp, ignored -> new BucketState(rateLimitPerMinute));
         return bucket.tryConsume();
     }
 
     private static final class BucketState {
 
         private final ReentrantLock lock = new ReentrantLock();
-        private double tokens = BUCKET_CAPACITY;
+        private final double bucketCapacity;
+        private final double tokensPerNano;
+        private double tokens;
         private long lastRefillNanos = System.nanoTime();
+
+        private BucketState(int rateLimitPerMinute) {
+            bucketCapacity = rateLimitPerMinute;
+            tokensPerNano = bucketCapacity / REFILL_INTERVAL_NANOS;
+            tokens = bucketCapacity;
+        }
 
         private boolean tryConsume() {
             lock.lock();
@@ -47,7 +59,7 @@ public class RateLimiter {
                 return;
             }
 
-            tokens = Math.min(BUCKET_CAPACITY, tokens + elapsedNanos * TOKENS_PER_NANO);
+            tokens = Math.min(bucketCapacity, tokens + elapsedNanos * tokensPerNano);
             lastRefillNanos = now;
         }
     }

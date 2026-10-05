@@ -8,8 +8,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class ResilientReverseProxyApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(ResilientReverseProxyApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(ResilientReverseProxyApplication.class, args);
+    }
 
 }

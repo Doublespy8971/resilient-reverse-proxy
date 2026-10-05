@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -12,20 +11,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class UpstreamRegistry {
 
-    private final List<String> nodes = Arrays.stream(System.getenv()
-                    .getOrDefault(
-                            "UPSTREAM_URLS",
-                            "http://localhost:8081,http://localhost:8082")
-                    .split(","))
-            .map(String::trim)
-            .filter(node -> !node.isEmpty())
-            .toList();
-    private final Map<String, CircuitBreaker> circuitBreakers = nodes.stream()
-            .collect(Collectors.toUnmodifiableMap(node -> node, node -> new CircuitBreaker()));
+    private final List<String> nodes;
+    private final Map<String, CircuitBreaker> circuitBreakers;
     private final Map<String, Boolean> nodeHealth = new ConcurrentHashMap<>();
     private final AtomicInteger nextNodeIndex = new AtomicInteger();
 
-    public UpstreamRegistry() {
+    public UpstreamRegistry(ProxyConfig proxyConfig) {
+        nodes = List.copyOf(proxyConfig.getBackends());
+        circuitBreakers = nodes.stream()
+                .collect(Collectors.toUnmodifiableMap(node -> node, CircuitBreaker::new));
         nodes.forEach(node -> nodeHealth.put(node, true));
     }
 

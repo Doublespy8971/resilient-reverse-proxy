@@ -6,11 +6,13 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimiter rateLimiter;
@@ -29,6 +31,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         metricsService.recordRequest();
         if (!rateLimiter.allowRequest(request.getRemoteAddr())) {
             metricsService.recordRateLimitedRequest();
+            log.info("Rate-limited request from client IP {}", request.getRemoteAddr());
             response.sendError(
                     HttpStatus.TOO_MANY_REQUESTS.value(),
                     "Rate limit exceeded");

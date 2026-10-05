@@ -6,6 +6,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class CircuitBreaker {
 
     private static final int FAILURE_THRESHOLD = 3;
@@ -21,6 +24,15 @@ public class CircuitBreaker {
     private final AtomicInteger failureCount = new AtomicInteger();
     private final AtomicLong openedAtNanos = new AtomicLong();
     private final AtomicBoolean halfOpenProbeInProgress = new AtomicBoolean();
+    private final String targetUrl;
+
+    public CircuitBreaker() {
+        this("unknown");
+    }
+
+    public CircuitBreaker(String targetUrl) {
+        this.targetUrl = targetUrl;
+    }
 
     public boolean allowRequest() {
         State currentState = state.get();
@@ -55,7 +67,9 @@ public class CircuitBreaker {
         int failures = failureCount.incrementAndGet();
         if (failures >= FAILURE_THRESHOLD) {
             openedAtNanos.set(System.nanoTime());
-            state.compareAndSet(State.CLOSED, State.OPEN);
+            if (state.compareAndSet(State.CLOSED, State.OPEN)) {
+                log.warn("Circuit breaker tripped to OPEN for backend {}", targetUrl);
+            }
         }
     }
 
@@ -74,6 +88,7 @@ public class CircuitBreaker {
         if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
             halfOpenProbeInProgress.set(false);
             failureCount.set(FAILURE_THRESHOLD);
+            log.warn("Circuit breaker tripped to OPEN for backend {}", targetUrl);
         }
     }
 }

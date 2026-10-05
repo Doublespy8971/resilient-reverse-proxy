@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.Enumeration;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,7 @@ import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
 
 @RestController
+@Slf4j
 public class ProxyController {
 
     private final UpstreamRegistry upstreamRegistry;
@@ -39,6 +41,7 @@ public class ProxyController {
         CircuitBreaker circuitBreaker = upstreamRegistry.getCircuitBreaker(upstreamUrl);
         if (!circuitBreaker.allowRequest()) {
             metricsService.recordCircuitBreakerRejection();
+            log.warn("Circuit breaker rejected request for backend {}", upstreamUrl);
             throw new ResponseStatusException(
                     SERVICE_UNAVAILABLE, "Upstream circuit breaker is open");
         }

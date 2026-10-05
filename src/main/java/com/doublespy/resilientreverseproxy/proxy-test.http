@@ -1,0 +1,20 @@
+### 1. Test Standard Load Balancing (Click this multiple times)
+# You should see the response alternate if round-robin is working
+GET http://localhost:8080/
+Accept: application/json
+
+###
+
+### 2. Test Rate Limiter (Token Bucket)
+# Click the "Run with" icon (or hit Alt+Enter / Option+Enter)
+# and execute this repeatedly and rapidly.
+# After reaching your limit (e.g., 100 req/min), it should return 429 Too Many Requests.
+GET http://localhost:8080/
+Accept: application/json
+
+###
+
+### 3. Test the Metrics Endpoint
+# Verify that your total requests and rate-limited counts are increasing.
+GET http://localhost:8080/metrics
+Accept: application/json
