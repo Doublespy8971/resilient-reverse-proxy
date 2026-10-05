@@ -6,9 +6,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.springframework.stereotype.Component;
-
-@Component
 public class CircuitBreaker {
 
     private static final int FAILURE_THRESHOLD = 3;

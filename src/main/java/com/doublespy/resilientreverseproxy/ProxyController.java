@@ -16,24 +16,35 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
+import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
 
 @RestController
 public class ProxyController {
 
     private final UpstreamRegistry upstreamRegistry;
+    private final MetricsService metricsService;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    public ProxyController(UpstreamRegistry upstreamRegistry) {
+    public ProxyController(UpstreamRegistry upstreamRegistry, MetricsService metricsService) {
         this.upstreamRegistry = upstreamRegistry;
+        this.metricsService = metricsService;
     }
 
     @GetMapping("/**")
     public ResponseEntity<byte[]> proxyGet(HttpServletRequest incomingRequest) {
+        String upstreamUrl = upstreamRegistry.getNextNode();
+        CircuitBreaker circuitBreaker = upstreamRegistry.getCircuitBreaker(upstreamUrl);
+        if (!circuitBreaker.allowRequest()) {
+            metricsService.recordCircuitBreakerRejection();
+            throw new ResponseStatusException(
+                    SERVICE_UNAVAILABLE, "Upstream circuit breaker is open");
+        }
+
         HttpRequest.Builder upstreamRequest = HttpRequest.newBuilder()
-                .uri(buildUpstreamUri(incomingRequest))
+                .uri(buildUpstreamUri(incomingRequest, upstreamUrl))
                 .timeout(Duration.ofSeconds(30))
                 .GET();
 
@@ -44,6 +55,13 @@ public class ProxyController {
                     upstreamRequest.build(),
                     HttpResponse.BodyHandlers.ofByteArray());
 
+            if (upstreamResponse.statusCode() >= 200
+                    && upstreamResponse.statusCode() < 400) {
+                circuitBreaker.recordSuccess();
+            } else if (upstreamResponse.statusCode() >= 500) {
+                circuitBreaker.recordFailure();
+            }
+
             HttpHeaders responseHeaders = new HttpHeaders();
             upstreamResponse.headers().map().forEach(responseHeaders::put);
 
@@ -52,16 +70,17 @@ public class ProxyController {
                     .body(upstreamResponse.body());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            circuitBreaker.recordFailure();
             throw new ResponseStatusException(BAD_GATEWAY, "Upstream request was interrupted", exception);
         } catch (IOException exception) {
+            circuitBreaker.recordFailure();
             throw new ResponseStatusException(BAD_GATEWAY, "Unable to reach upstream service", exception);
         }
     }
 
-    private URI buildUpstreamUri(HttpServletRequest incomingRequest) {
+    private URI buildUpstreamUri(HttpServletRequest incomingRequest, String upstreamUrl) {
         String query = incomingRequest.getQueryString();
         String path = incomingRequest.getRequestURI();
-        String upstreamUrl = upstreamRegistry.getNextNode();
         return URI.create(upstreamUrl + path + (query == null ? "" : "?" + query));
     }
 
