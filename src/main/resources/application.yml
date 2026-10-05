@@ -2,8 +2,18 @@ spring:
   application:
     name: resilient-reverse-proxy
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
 proxy:
   backends:
     - http://localhost:8081
     - http://localhost:8082
   rate-limit-per-minute: 100
+  failure-threshold: 3
+  open-delay: 10s
+  trust-forwarded-headers: false
+  trusted-proxies: []

@@ -19,20 +19,36 @@ public class UpstreamRegistry {
     public UpstreamRegistry(ProxyConfig proxyConfig) {
         nodes = List.copyOf(proxyConfig.getBackends());
         circuitBreakers = nodes.stream()
-                .collect(Collectors.toUnmodifiableMap(node -> node, CircuitBreaker::new));
+                .collect(Collectors.toUnmodifiableMap(
+                        node -> node,
+                        node -> new CircuitBreaker(
+                                node,
+                                proxyConfig.getFailureThreshold(),
+                                proxyConfig.getOpenDelay())));
         nodes.forEach(node -> nodeHealth.put(node, true));
     }
 
     public String getNextNode() {
-        for (int attempts = 0; attempts < nodes.size(); attempts++) {
-            int nodeIndex = Math.floorMod(nextNodeIndex.getAndIncrement(), nodes.size());
-            String node = nodes.get(nodeIndex);
-            if (isHealthy(node)) {
-                return node;
-            }
+        return getEligibleNodes().stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No eligible upstream nodes available"));
+    }
+
+    public List<String> getEligibleNodes() {
+        if (nodes.isEmpty()) {
+            return List.of();
         }
 
-        throw new IllegalStateException("No healthy upstream nodes available");
+        int startIndex = Math.floorMod(nextNodeIndex.getAndIncrement(), nodes.size());
+        List<String> eligibleNodes = new java.util.ArrayList<>();
+        for (int offset = 0; offset < nodes.size(); offset++) {
+            String node = nodes.get((startIndex + offset) % nodes.size());
+            CircuitBreaker circuitBreaker = circuitBreakers.get(node);
+            if (isHealthy(node) && circuitBreaker.isRequestEligible()) {
+                eligibleNodes.add(node);
+            }
+        }
+        return eligibleNodes;
     }
 
     public List<String> getNodes() {

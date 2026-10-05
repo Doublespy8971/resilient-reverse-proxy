@@ -17,10 +17,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimiter rateLimiter;
     private final MetricsService metricsService;
+    private final ProxyConfig proxyConfig;
 
-    public RateLimitFilter(RateLimiter rateLimiter, MetricsService metricsService) {
+    public RateLimitFilter(
+            RateLimiter rateLimiter, MetricsService metricsService, ProxyConfig proxyConfig) {
         this.rateLimiter = rateLimiter;
         this.metricsService = metricsService;
+        this.proxyConfig = proxyConfig;
     }
 
     @Override
@@ -29,9 +32,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         metricsService.recordRequest();
-        if (!rateLimiter.allowRequest(request.getRemoteAddr())) {
+        String clientIp = resolveClientIp(request);
+        if (!rateLimiter.allowRequest(clientIp)) {
             metricsService.recordRateLimitedRequest();
-            log.info("Rate-limited request from client IP {}", request.getRemoteAddr());
+            long retryAfter = rateLimiter.retryAfterSeconds(clientIp);
+            log.info("Rate-limited request from client IP {}", clientIp);
+            response.setHeader("Retry-After", Long.toString(retryAfter));
             response.sendError(
                     HttpStatus.TOO_MANY_REQUESTS.value(),
                     "Rate limit exceeded");
@@ -39,5 +45,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String directPeer = request.getRemoteAddr();
+        if (!proxyConfig.isTrustForwardedHeaders()
+                || !proxyConfig.getTrustedProxies().contains(directPeer)) {
+            return directPeer;
+        }
+
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor == null || forwardedFor.isBlank()) {
+            return directPeer;
+        }
+        return forwardedFor.split(",")[0].trim();
     }
 }
