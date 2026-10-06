@@ -4,7 +4,7 @@ spring:
 
 management:
   server:
-    port: 9090
+    port: 9091
     address: 127.0.0.1
   endpoints:
     web:

@@ -74,7 +74,7 @@ environment variables shown by Docker Compose to the corresponding `proxy.*` pro
 | `proxy.trust-forwarded-headers` | `false` | Whether trusted proxy addresses may supply the client IP |
 | `proxy.trusted-proxies` | `[]` | Remote addresses allowed to supply `X-Forwarded-For` |
 | `management.endpoints.web.exposure.include` | `health,info,prometheus` | Actuator endpoints exposed over HTTP |
-| `management.server.port` | `9090` | Local-only port for Actuator endpoints |
+| `management.server.port` | `9091` | Local-only port for Actuator endpoints |
 | `management.server.address` | `127.0.0.1` | Address bound by the Actuator server |
 
 In Docker Compose, `PROXY_BACKENDS` is set to `http://backend1:5678,http://backend2:5678` and
@@ -132,7 +132,7 @@ The counters represent:
 - `rate_limited_requests`: requests rejected with HTTP `429`.
 - `circuit_breaker_rejections`: requests rejected with HTTP `503` because the selected backend circuit was open.
 
-Prometheus metrics are available at `http://localhost:9090/actuator/prometheus`. The exposed Actuator endpoints
+Prometheus metrics are available at `http://localhost:9091/actuator/prometheus`. The exposed Actuator endpoints
 are limited to `health`, `info`, and `prometheus`. Prometheus includes request counters tagged by backend and status class,
 request duration percentile histograms, per-backend circuit and health gauges, and rate-limit/circuit-rejection
 counters.
