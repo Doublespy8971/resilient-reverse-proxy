@@ -71,6 +71,7 @@ class ProxyIntegrationTest {
         registry.add("proxy.backends", ProxyIntegrationTest::backendUrls);
         registry.add("proxy.rate-limit-per-minute", () -> 1000);
         registry.add("proxy.open-delay", () -> "1m");
+        registry.add("management.server.port", () -> 0);
     }
 
     private static List<String> backendUrls() {
