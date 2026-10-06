@@ -9,6 +9,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 class RateLimitFilterTest {
 
@@ -105,6 +107,25 @@ class RateLimitFilterTest {
 
         assertEquals(200, first.getStatus());
         assertEquals(429, second.getStatus());
+    }
+
+    @Test
+    void excludesActuatorRequestsFromRateLimitingAndRequestMetrics() throws Exception {
+        ProxyConfig config = config(true, List.of("10.0.0.2"));
+        MetricsService metricsService = mock(MetricsService.class);
+        RateLimitFilter filter = new RateLimitFilter(
+                new RateLimiter(config), metricsService, config);
+        FilterChain chain = mock(FilterChain.class);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/actuator/prometheus");
+        request.setRemoteAddr("10.0.0.2");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, chain);
+
+        verify(metricsService, never()).recordRequest();
+        verify(chain).doFilter(request, response);
+        assertEquals(200, response.getStatus());
     }
 
     private static MockHttpServletRequest request(String peer, String forwardedFor) {
