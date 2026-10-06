@@ -159,6 +159,7 @@ counters.
 - Responses are buffered in memory before they are returned to the client.
 - Retries are limited to two eligible upstream nodes per request.
 - Health checks have no hysteresis and immediately reflect the latest probe result.
+- A late success in `HALF_OPEN` may close the circuit before the probe request returns.
 
 ## Load test results
 
