@@ -9,8 +9,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
 
 class RateLimitFilterTest {
 
@@ -110,22 +108,25 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void excludesActuatorRequestsFromRateLimitingAndRequestMetrics() throws Exception {
+    void rateLimitsActuatorPathsOnProxyPort() throws Exception {
         ProxyConfig config = config(true, List.of("10.0.0.2"));
-        MetricsService metricsService = mock(MetricsService.class);
         RateLimitFilter filter = new RateLimitFilter(
-                new RateLimiter(config), metricsService, config);
+                new RateLimiter(config), mock(MetricsService.class), config);
         FilterChain chain = mock(FilterChain.class);
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRequestURI("/actuator/prometheus");
-        request.setRemoteAddr("10.0.0.2");
-        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockHttpServletRequest firstRequest = new MockHttpServletRequest();
+        firstRequest.setRequestURI("/actuator/anything");
+        firstRequest.setRemoteAddr("10.0.0.2");
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        MockHttpServletRequest secondRequest = new MockHttpServletRequest();
+        secondRequest.setRequestURI("/actuator/anything");
+        secondRequest.setRemoteAddr("10.0.0.2");
+        MockHttpServletResponse second = new MockHttpServletResponse();
 
-        filter.doFilter(request, response, chain);
+        filter.doFilter(firstRequest, first, chain);
+        filter.doFilter(secondRequest, second, chain);
 
-        verify(metricsService, never()).recordRequest();
-        verify(chain).doFilter(request, response);
-        assertEquals(200, response.getStatus());
+        assertEquals(200, first.getStatus());
+        assertEquals(429, second.getStatus());
     }
 
     private static MockHttpServletRequest request(String peer, String forwardedFor) {
