@@ -23,7 +23,8 @@ public class HealthCheckDaemon {
     private final UpstreamRegistry upstreamRegistry;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HEALTH_CHECK_TIMEOUT)
-            .build();
+        .version(HttpClient.Version.HTTP_1_1)
+        .build();
     private final ExecutorService healthCheckExecutor = Executors.newFixedThreadPool(4);
 
     public HealthCheckDaemon(UpstreamRegistry upstreamRegistry) {
