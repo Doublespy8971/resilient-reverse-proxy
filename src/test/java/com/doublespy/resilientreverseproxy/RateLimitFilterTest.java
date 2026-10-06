@@ -52,10 +52,65 @@ class RateLimitFilterTest {
         assertEquals("60", response.getHeader("Retry-After"));
     }
 
-    private static MockHttpServletRequest request(String peer, String forwardedIp) {
+    @Test
+    void usesRightmostUntrustedAddressFromForwardedChain() throws Exception {
+        ProxyConfig config = config(true, List.of("10.0.0.2", "10.0.0.3"));
+        RateLimitFilter filter = new RateLimitFilter(
+                new RateLimiter(config), mock(MetricsService.class), config);
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest request = request("10.0.0.2", "1.2.3.4, 198.51.100.10, 10.0.0.3");
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        filter.doFilter(request, first, chain);
+        MockHttpServletRequest sameClient = request("10.0.0.2", "1.2.3.4, 198.51.100.10, 10.0.0.3");
+        MockHttpServletResponse second = new MockHttpServletResponse();
+        filter.doFilter(sameClient, second, chain);
+
+        assertEquals(200, first.getStatus());
+        assertEquals(429, second.getStatus());
+    }
+
+    @Test
+    void fallsBackToPeerWhenForwardedChainHasNoValidUntrustedAddress() throws Exception {
+        ProxyConfig config = config(true, List.of("10.0.0.2"));
+        RateLimitFilter filter = new RateLimitFilter(
+                new RateLimiter(config), mock(MetricsService.class), config);
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest firstRequest = request("10.0.0.2", "garbage, also-garbage");
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        filter.doFilter(firstRequest, first, chain);
+        MockHttpServletRequest secondRequest = request("10.0.0.2", "garbage, also-garbage");
+        MockHttpServletResponse second = new MockHttpServletResponse();
+        filter.doFilter(secondRequest, second, chain);
+
+        assertEquals(200, first.getStatus());
+        assertEquals(429, second.getStatus());
+    }
+
+    @Test
+    void normalizesEquivalentIpv6LoopbackAddresses() throws Exception {
+        ProxyConfig config = config(true, List.of("::1"));
+        RateLimitFilter filter = new RateLimitFilter(
+                new RateLimiter(config), mock(MetricsService.class), config);
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest firstRequest = request(
+                "0:0:0:0:0:0:0:1", "198.51.100.10");
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        filter.doFilter(firstRequest, first, chain);
+        MockHttpServletRequest secondRequest = request("::1", "198.51.100.10");
+        MockHttpServletResponse second = new MockHttpServletResponse();
+        filter.doFilter(secondRequest, second, chain);
+
+        assertEquals(200, first.getStatus());
+        assertEquals(429, second.getStatus());
+    }
+
+    private static MockHttpServletRequest request(String peer, String forwardedFor) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr(peer);
-        request.addHeader("X-Forwarded-For", forwardedIp);
+        request.addHeader("X-Forwarded-For", forwardedFor);
         return request;
     }
 
