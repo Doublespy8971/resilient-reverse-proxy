@@ -113,9 +113,14 @@ public class CircuitBreaker {
     public void recordSuccess() {
         transitionLock.lock();
         try {
-            failureCount.set(0);
-            halfOpenProbeInProgress.set(false);
-            state.set(State.CLOSED);
+            State currentState = state.get();
+            if (currentState == State.CLOSED) {
+                failureCount.set(0);
+            } else if (currentState == State.HALF_OPEN) {
+                failureCount.set(0);
+                halfOpenProbeInProgress.set(false);
+                state.set(State.CLOSED);
+            }
         } finally {
             transitionLock.unlock();
         }
