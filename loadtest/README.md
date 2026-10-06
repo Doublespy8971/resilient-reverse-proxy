@@ -42,6 +42,11 @@ python3 loadtest/analyze.py results.csv --from 20 --to 40
 
 The interval is measured in seconds from the first timestamp in the CSV and uses an inclusive lower bound and
 exclusive upper bound.
+For Unix timestamps recorded with `date +%s`, use `--from-epoch` and `--to-epoch` instead:
+
+```bash
+python3 loadtest/analyze.py results.csv --from-epoch 1760350000 --to-epoch 1760350020
+```
 
 To target another proxy URL:
 
