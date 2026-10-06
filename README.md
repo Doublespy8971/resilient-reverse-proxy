@@ -156,6 +156,9 @@ counters.
 - Rate-limit buckets, health state, circuit state, and metrics are held in memory and are lost on restart.
 - The proxy is a single-instance service; there is no shared state or coordination across replicas.
 - Health checks use each backend's `/health` endpoint and treat any non-5xx response as healthy.
+- Responses are buffered in memory before they are returned to the client.
+- Retries are limited to two eligible upstream nodes per request.
+- Health checks have no hysteresis and immediately reflect the latest probe result.
 
 ## Load test results
 
