@@ -1,9 +1,12 @@
 package com.doublespy.resilientreverseproxy;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -70,22 +73,27 @@ class RateLimitFilterTest {
         assertEquals(429, second.getStatus());
     }
 
-    @Test
-    void fallsBackToPeerWhenForwardedChainHasNoValidUntrustedAddress() throws Exception {
+    @ParameterizedTest
+    @MethodSource("invalidForwardedAddresses")
+    void rejectsNonLiteralForwardedAddresses(String invalidAddress) throws Exception {
         ProxyConfig config = config(true, List.of("10.0.0.2"));
         RateLimitFilter filter = new RateLimitFilter(
                 new RateLimiter(config), mock(MetricsService.class), config);
         FilterChain chain = mock(FilterChain.class);
 
-        MockHttpServletRequest firstRequest = request("10.0.0.2", "garbage, also-garbage");
+        MockHttpServletRequest firstRequest = request("10.0.0.2", invalidAddress);
         MockHttpServletResponse first = new MockHttpServletResponse();
         filter.doFilter(firstRequest, first, chain);
-        MockHttpServletRequest secondRequest = request("10.0.0.2", "garbage, also-garbage");
+        MockHttpServletRequest secondRequest = request("10.0.0.2", invalidAddress);
         MockHttpServletResponse second = new MockHttpServletResponse();
         filter.doFilter(secondRequest, second, chain);
 
         assertEquals(200, first.getStatus());
         assertEquals(429, second.getStatus());
+    }
+
+    private static Stream<String> invalidForwardedAddresses() {
+        return Stream.of("beef", "abc", "dead", "localhost");
     }
 
     @Test

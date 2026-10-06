@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,12 +24,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimiter rateLimiter;
     private final MetricsService metricsService;
     private final ProxyConfig proxyConfig;
+    private final Set<String> trustedProxies;
 
     public RateLimitFilter(
             RateLimiter rateLimiter, MetricsService metricsService, ProxyConfig proxyConfig) {
         this.rateLimiter = rateLimiter;
         this.metricsService = metricsService;
         this.proxyConfig = proxyConfig;
+        this.trustedProxies = proxyConfig.getTrustedProxies().stream()
+                .map(this::normalizeIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
@@ -74,9 +82,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private boolean isTrustedProxy(String address) {
         String normalizedAddress = normalizeIp(address);
         return normalizedAddress != null
-                && proxyConfig.getTrustedProxies().stream()
-                        .map(this::normalizeIp)
-                        .anyMatch(normalizedAddress::equals);
+                && trustedProxies.contains(normalizedAddress);
     }
 
     private String normalizeIp(String address) {
@@ -85,8 +91,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         String candidate = address.trim();
-        if (!candidate.matches("(?:\\d{1,3}\\.){3}\\d{1,3}")
-                && !candidate.matches("[0-9a-fA-F:]+")) {
+        if (candidate.matches("(?:\\d{1,3}\\.){3}\\d{1,3}")) {
+            for (String octet : candidate.split("\\.")) {
+                if (Integer.parseInt(octet) > 255) {
+                    return null;
+                }
+            }
+        } else if (!candidate.matches("[0-9a-fA-F:.]+")
+                || candidate.chars().filter(character -> character == ':').count() < 2) {
             return null;
         }
 
