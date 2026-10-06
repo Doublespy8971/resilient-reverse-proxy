@@ -40,7 +40,6 @@ class ProxyControllerTest {
             UpstreamRegistry registry = mock(UpstreamRegistry.class);
             MetricsService metricsService = mock(MetricsService.class);
             CircuitBreaker circuitBreaker = new CircuitBreaker(backendUrl);
-            when(registry.getNextNode()).thenReturn(backendUrl);
             when(registry.getEligibleNodes()).thenReturn(List.of(backendUrl));
             when(registry.getCircuitBreaker(backendUrl)).thenReturn(circuitBreaker);
 
