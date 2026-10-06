@@ -1,0 +1,4 @@
+services:
+  proxy:
+    environment:
+      PROXY_RATE_LIMIT_PER_MINUTE: 100000
