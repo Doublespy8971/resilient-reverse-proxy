@@ -17,7 +17,7 @@ Use the override only for this test; normal deployments should retain an appropr
 In a second terminal, start the load test:
 
 ```bash
-k6 run loadtest/proxy.js
+k6 run --out csv=results.csv loadtest/proxy.js
 ```
 
 At approximately 30 seconds after starting k6, stop one backend:
@@ -33,13 +33,20 @@ docker compose start backend1
 ```
 
 Record the restart timestamp and the timestamp of the first sustained successful proxy response. The difference
-is the recovery time after restarting the backend. The k6 summary reports total throughput, p50/p95/p99 latency, overall error rate, and time-bucketed status counts
-for non-2xx responses; use the interval around the stop event to calculate the failover-specific error rate.
+is the recovery time after restarting the backend. Analyze the CSV output to print per-second non-2xx status counts
+and count failed requests in a selected interval:
+
+```bash
+python3 loadtest/analyze.py results.csv --from 20 --to 40
+```
+
+The interval is measured in seconds from the first timestamp in the CSV and uses an inclusive lower bound and
+exclusive upper bound.
 
 To target another proxy URL:
 
 ```bash
-PROXY_URL=http://localhost:8080/health k6 run loadtest/proxy.js
+PROXY_URL=http://localhost:8080/health k6 run --out csv=results.csv loadtest/proxy.js
 ```
 
 Stop the stack when finished:
