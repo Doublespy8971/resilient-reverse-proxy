@@ -74,6 +74,8 @@ environment variables shown by Docker Compose to the corresponding `proxy.*` pro
 | `proxy.trust-forwarded-headers` | `false` | Whether trusted proxy addresses may supply the client IP |
 | `proxy.trusted-proxies` | `[]` | Remote addresses allowed to supply `X-Forwarded-For` |
 | `management.endpoints.web.exposure.include` | `health,info,prometheus` | Actuator endpoints exposed over HTTP |
+| `management.server.port` | `9091` | Local-only port for Actuator endpoints |
+| `management.server.address` | `127.0.0.1` | Address bound by the Actuator server |
 
 In Docker Compose, `PROXY_BACKENDS` is set to `http://backend1:5678,http://backend2:5678` and
 `PROXY_RATE_LIMIT_PER_MINUTE` is set to `100`.
@@ -130,8 +132,8 @@ The counters represent:
 - `rate_limited_requests`: requests rejected with HTTP `429`.
 - `circuit_breaker_rejections`: requests rejected with HTTP `503` because the selected backend circuit was open.
 
-Prometheus metrics are available at `/actuator/prometheus`. The exposed Actuator endpoints are limited to
-`health`, `info`, and `prometheus`. Prometheus includes request counters tagged by backend and status class,
+Prometheus metrics are available at `http://localhost:9091/actuator/prometheus`. The exposed Actuator endpoints
+are limited to `health`, `info`, and `prometheus`. Prometheus includes request counters tagged by backend and status class,
 request duration percentile histograms, per-backend circuit and health gauges, and rate-limit/circuit-rejection
 counters.
 
@@ -154,6 +156,10 @@ counters.
 - Rate-limit buckets, health state, circuit state, and metrics are held in memory and are lost on restart.
 - The proxy is a single-instance service; there is no shared state or coordination across replicas.
 - Health checks use each backend's `/health` endpoint and treat any non-5xx response as healthy.
+- Responses are buffered in memory before they are returned to the client.
+- Retries are limited to two eligible upstream nodes per request.
+- Health checks have no hysteresis and immediately reflect the latest probe result.
+- A late success in `HALF_OPEN` may close the circuit before the probe request returns.
 
 ## Load test results
 

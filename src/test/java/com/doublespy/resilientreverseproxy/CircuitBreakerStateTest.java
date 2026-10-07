@@ -75,6 +75,33 @@ class CircuitBreakerStateTest {
     }
 
     @Test
+    void lateSuccessDoesNotCloseOpenCircuit() {
+        CircuitBreaker breaker = new CircuitBreaker(
+                "http://backend", 1, Duration.ofNanos(1), () -> 0);
+        breaker.recordFailure();
+
+        breaker.recordSuccess();
+
+        assertEquals(CircuitBreaker.State.OPEN, breaker.getState());
+        assertFalse(breaker.allowRequest());
+    }
+
+    @Test
+    void lateSuccessFromProbeDoesNotCloseCircuitReopenedByAnotherFailure() {
+        AtomicLong now = new AtomicLong();
+        CircuitBreaker breaker = new CircuitBreaker(
+                "http://backend", 1, Duration.ofNanos(1), now::get);
+        breaker.recordFailure();
+        now.incrementAndGet();
+        assertTrue(breaker.allowRequest());
+        breaker.recordFailure();
+
+        breaker.recordSuccess();
+
+        assertEquals(CircuitBreaker.State.OPEN, breaker.getState());
+    }
+
+    @Test
     void exactlyOneOfThirtyTwoConcurrentCallsGetsHalfOpenProbe() throws InterruptedException {
         AtomicLong now = new AtomicLong();
         CircuitBreaker breaker = new CircuitBreaker(

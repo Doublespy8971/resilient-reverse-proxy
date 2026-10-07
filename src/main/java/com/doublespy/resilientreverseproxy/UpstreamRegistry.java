@@ -28,12 +28,6 @@ public class UpstreamRegistry {
         nodes.forEach(node -> nodeHealth.put(node, true));
     }
 
-    public String getNextNode() {
-        return getEligibleNodes().stream()
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No eligible upstream nodes available"));
-    }
-
     public List<String> getEligibleNodes() {
         if (nodes.isEmpty()) {
             return List.of();

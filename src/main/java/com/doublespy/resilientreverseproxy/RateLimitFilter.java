@@ -1,6 +1,12 @@
 package com.doublespy.resilientreverseproxy;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,12 +24,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimiter rateLimiter;
     private final MetricsService metricsService;
     private final ProxyConfig proxyConfig;
+    private final Set<String> trustedProxies;
 
     public RateLimitFilter(
             RateLimiter rateLimiter, MetricsService metricsService, ProxyConfig proxyConfig) {
         this.rateLimiter = rateLimiter;
         this.metricsService = metricsService;
         this.proxyConfig = proxyConfig;
+        this.trustedProxies = proxyConfig.getTrustedProxies().stream()
+                .map(this::normalizeIp)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
@@ -50,7 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private String resolveClientIp(HttpServletRequest request) {
         String directPeer = request.getRemoteAddr();
         if (!proxyConfig.isTrustForwardedHeaders()
-                || !proxyConfig.getTrustedProxies().contains(directPeer)) {
+                || !isTrustedProxy(directPeer)) {
             return directPeer;
         }
 
@@ -58,6 +69,43 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (forwardedFor == null || forwardedFor.isBlank()) {
             return directPeer;
         }
-        return forwardedFor.split(",")[0].trim();
+        String[] addresses = forwardedFor.split(",");
+        for (int index = addresses.length - 1; index >= 0; index--) {
+            String candidate = normalizeIp(addresses[index].trim());
+            if (candidate != null && !isTrustedProxy(candidate)) {
+                return candidate;
+            }
+        }
+        return directPeer;
+    }
+
+    private boolean isTrustedProxy(String address) {
+        String normalizedAddress = normalizeIp(address);
+        return normalizedAddress != null
+                && trustedProxies.contains(normalizedAddress);
+    }
+
+    private String normalizeIp(String address) {
+        if (address == null || address.isBlank()) {
+            return null;
+        }
+
+        String candidate = address.trim();
+        if (candidate.matches("(?:\\d{1,3}\\.){3}\\d{1,3}")) {
+            for (String octet : candidate.split("\\.")) {
+                if (Integer.parseInt(octet) > 255) {
+                    return null;
+                }
+            }
+        } else if (!candidate.matches("[0-9a-fA-F:.]+")
+                || candidate.chars().filter(character -> character == ':').count() < 2) {
+            return null;
+        }
+
+        try {
+            return InetAddress.getByName(candidate).getHostAddress().toLowerCase(Locale.ROOT);
+        } catch (UnknownHostException exception) {
+            return null;
+        }
     }
 }

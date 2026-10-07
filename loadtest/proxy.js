@@ -1,8 +1,9 @@
 import http from 'k6/http';
 import { check } from 'k6';
-import { Rate } from 'k6/metrics';
+import { Counter, Rate } from 'k6/metrics';
 
 const failoverErrors = new Rate('failover_errors');
+const rateLimitedResponses = new Counter('rate_limited_responses');
 
 export const options = {
   stages: [
@@ -18,9 +19,13 @@ export const options = {
 
 export default function () {
   const response = http.get(__ENV.PROXY_URL || 'http://localhost:8080/');
+  if (response.status === 429) {
+    rateLimitedResponses.add(1);
+  }
   const ok = check(response, {
     'proxy returns a response': (result) => result.status > 0,
-    'proxy returns success or upstream response': (result) => result.status < 500,
+    'proxy returns success or upstream response': (result) => result.status < 500
+      && result.status !== 429,
   });
 
   failoverErrors.add(!ok && response.status >= 500);
@@ -37,6 +42,7 @@ export function handleSummary(data) {
   console.log(`p95_ms=${duration['p(95)'] || 'n/a'}`);
   console.log(`p99_ms=${duration['p(99)'] || 'n/a'}`);
   console.log(`error_rate=${failed}`);
+  console.log(`rate_limited_responses=${metrics.rate_limited_responses?.values.count || 0}`);
   console.log('recovery_time_after_restart=measure from restart timestamp to first sustained successful response');
 
   return {};

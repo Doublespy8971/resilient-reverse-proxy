@@ -51,6 +51,7 @@ public class ProxyController {
         this(upstreamRegistry, metricsService, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
+                .version(HttpClient.Version.HTTP_1_1)
                 .build());
     }
 
@@ -69,6 +70,12 @@ public class ProxyController {
         for (int attempt = 0; attempt < Math.min(2, eligibleNodes.size()); attempt++) {
             String upstreamUrl = eligibleNodes.get(attempt);
             CircuitBreaker circuitBreaker = upstreamRegistry.getCircuitBreaker(upstreamUrl);
+            URI upstreamUri;
+            try {
+                upstreamUri = buildUpstreamUri(incomingRequest, upstreamUrl);
+            } catch (IllegalArgumentException exception) {
+                return ResponseEntity.badRequest().build();
+            }
             if (!circuitBreaker.allowRequest()) {
                 continue;
             }
@@ -76,7 +83,7 @@ public class ProxyController {
             Timer.Sample timerSample = metricsService.startRequestTimer();
             try {
             HttpRequest.Builder upstreamRequest = HttpRequest.newBuilder()
-                    .uri(buildUpstreamUri(incomingRequest, upstreamUrl))
+                    .uri(upstreamUri)
                     .timeout(Duration.ofSeconds(30))
                     .GET();
             copyRequestHeaders(incomingRequest, upstreamRequest);

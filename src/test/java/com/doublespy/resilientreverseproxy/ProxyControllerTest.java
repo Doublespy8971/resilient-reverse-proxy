@@ -13,6 +13,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class ProxyControllerTest {
@@ -38,7 +40,6 @@ class ProxyControllerTest {
             UpstreamRegistry registry = mock(UpstreamRegistry.class);
             MetricsService metricsService = mock(MetricsService.class);
             CircuitBreaker circuitBreaker = new CircuitBreaker(backendUrl);
-            when(registry.getNextNode()).thenReturn(backendUrl);
             when(registry.getEligibleNodes()).thenReturn(List.of(backendUrl));
             when(registry.getCircuitBreaker(backendUrl)).thenReturn(circuitBreaker);
 
@@ -57,5 +58,27 @@ class ProxyControllerTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void returnsBadRequestBeforeAllowingCircuitForInvalidUpstreamUri() {
+        String invalidBackendUrl = "http://[invalid";
+        UpstreamRegistry registry = mock(UpstreamRegistry.class);
+        MetricsService metricsService = mock(MetricsService.class);
+        CircuitBreaker circuitBreaker = mock(CircuitBreaker.class);
+        when(registry.getEligibleNodes()).thenReturn(List.of(invalidBackendUrl));
+        when(registry.getCircuitBreaker(invalidBackendUrl)).thenReturn(circuitBreaker);
+
+        ProxyController controller = new ProxyController(
+                registry, metricsService, HttpClient.newHttpClient());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/health");
+
+        var response = controller.proxyGet(request);
+
+        assertEquals(400, response.getStatusCode().value());
+        verify(circuitBreaker, never()).allowRequest();
+        verify(circuitBreaker, never()).recordFailure();
+        verify(metricsService, never()).recordCircuitBreakerRejection();
     }
 }
