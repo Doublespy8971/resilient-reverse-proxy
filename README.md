@@ -163,17 +163,44 @@ counters.
 
 ## Load test results
 
-Run the k6 scenario and follow the timed backend stop/restart procedure in
-[`loadtest/README.md`](loadtest/README.md). Replace the placeholders below with the measured values.
+These are local Docker measurements from a 2018 MacBook Pro (MacBookPro15,2) with a 4-core Intel i7 2.8 GHz
+(8 logical) and 16 GB RAM. Docker Desktop was limited to 8 CPU and 8 GB. k6, the proxy, and both
+`hashicorp/http-echo` backends ran on the same machine. The test used 20 VUs for 80 seconds
+(10 seconds ramp up, 60 seconds steady, 10 seconds ramp down), with the proxy rate limit raised to
+100000 requests per minute via `docker-compose.loadtest.yml`.
 
-| Metric | Result |
-|---|---|
-| Throughput | TBD (not measured yet) |
-| p50 latency | TBD (not measured yet) |
-| p95 latency | TBD (not measured yet) |
-| p99 latency | TBD (not measured yet) |
-| Error rate during failover | TBD (not measured yet) |
-| Time to recover after backend restart | TBD (not measured yet) |
+| Metric | Baseline | Failover |
+|---|---:|---:|
+| Throughput | 2,275 req/s | 2,114 req/s |
+| p50 latency | not captured | 7.3 ms |
+| p95 latency | 13.1 ms | 14.9 ms |
+| p99 latency | 18.9 ms | 23.1 ms |
+| Error rate | 0 | 0 |
+| Rate-limited responses | 0 | 0 |
+| Failed requests during kill-to-restart window | TBD (not measured) | 0 of N requests |
+| Time to recover after backend restart | TBD (not measured) | about 1 s |
+
+The failover run killed `backend1` at about 38 seconds and restarted it about 23 seconds later. Recovery was measured
+from restart until the first response from the restarted backend was served again in a single run, with 1-second
+timestamp resolution. Health checks run every 5 seconds, so the worst case is closer to 5 seconds.
+
+### How to read these numbers
+
+This was a single-machine test with trivial echo backends, no TLS, and 20 VUs. It measures proxy overhead on a
+laptop, not production capacity. Small differences between baseline and failover are within run-to-run noise and
+must not be presented as a failover cost.
+
+### Reproduce
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up --build -d
+k6 run --quiet --out csv=results.csv --summary-trend-stats="avg,med,p(50),p(90),p(95),p(99),max" loadtest/proxy.js
+docker compose kill backend1
+docker compose start backend1
+python3 loadtest/analyze.py results.csv --from-epoch <T1> --to-epoch <T2>
+```
+
+Run the kill and restart commands during the k6 run, recording the Unix timestamps as `<T1>` and `<T2>`.
 
 ## Request Flow
 
